@@ -1,0 +1,73 @@
+import 'package:flutter/material.dart';
+import '../../models/booking_model.dart';
+import 'package:intl/intl.dart';
+
+class MyBookingCard extends StatelessWidget {
+  final BookingModel booking;
+
+  const MyBookingCard({super.key, required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    // Check if expired
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final isExpired = booking.bookingDate.isBefore(today);
+
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isExpired ? Colors.grey.shade100 : Theme.of(context).primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.event_seat,
+                color: isExpired ? Colors.grey : Theme.of(context).primaryColor,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Room Booking',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    DateFormat('EEEE, MMM dd, yyyy').format(booking.bookingDate),
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: isExpired ? Colors.grey.shade200 : Theme.of(context).primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                isExpired ? 'Expired' : 'Active',
+                style: TextStyle(
+                  color: isExpired ? Colors.grey.shade700 : Theme.of(context).primaryColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

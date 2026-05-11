@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "67747794201",
+    "project_id": "room-booking-app-aus-2026",
+    "storage_bucket": "room-booking-app-aus-2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:67747794201:android:c2c742bdcfaba6bd29c988",
+        "android_client_info": {
+          "package_name": "com.example.frontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDc_ygbPXmMQe-ZPwykGU3ulD7uvw2lDCs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
