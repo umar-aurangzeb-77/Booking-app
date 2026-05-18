@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../models/booking_model.dart';
+import '../../models/room_model.dart';
 import '../../services/booking_service.dart';
+import '../../services/admin_room_service.dart';
 import '../../services/local_session_service.dart';
 import '../../widgets/student/my_booking_card.dart';
 
@@ -14,8 +16,10 @@ class MyBookingsScreen extends StatefulWidget {
 class _MyBookingsScreenState extends State<MyBookingsScreen> {
   final BookingService _bookingService = BookingService();
   final LocalSessionService _sessionService = LocalSessionService();
+  final AdminRoomService _roomService = AdminRoomService();
   
   List<BookingModel> _bookings = [];
+  List<RoomModel> _allRooms = [];
   bool _isLoading = true;
 
   @override
@@ -30,9 +34,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       final student = await _sessionService.getCurrentStudent();
       if (student != null) {
         final bookings = await _bookingService.fetchMyBookings(student.id);
+        final all = await _roomService.fetchRooms();
         if (mounted) {
           setState(() {
             _bookings = bookings;
+            _allRooms = all;
           });
         }
       }
@@ -61,7 +67,9 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: _bookings.length,
                     itemBuilder: (context, index) {
-                      return MyBookingCard(booking: _bookings[index]);
+                      final booking = _bookings[index];
+                      final roomName = _allRooms.firstWhere((r) => r.id == booking.roomId, orElse: () => RoomModel(id: '', name: 'Unknown Room', capacity: 0)).name;
+                      return MyBookingCard(booking: booking, roomName: roomName);
                     },
                   ),
                 ),

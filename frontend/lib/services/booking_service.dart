@@ -17,9 +17,9 @@ class BookingService {
 
   Future<List<RoomModel>> fetchAvailableRooms(DateTime date) async {
     final allRooms = await _adminRoomService.fetchRooms();
-    final bookedRoomIds = await _getBookedRoomIds(date);
+    final fullyBookedRoomIds = await _getFullyBookedRoomIds(date, allRooms);
 
-    return allRooms.where((room) => !bookedRoomIds.contains(room.id)).toList();
+    return allRooms.where((room) => !fullyBookedRoomIds.contains(room.id)).toList();
   }
 
   Future<List<BookingModel>> fetchBookedRooms(DateTime date) async {
@@ -36,7 +36,6 @@ class BookingService {
           .where('booking_date', isLessThan: "${date.year}-${date.month.toString().padLeft(2, '0')}-${(date.day + 1).toString().padLeft(2, '0')}")
           .get();
 
-      // Better fallback: just fetch all for the current demo and filter locally since date strings can be tricky in Firestore without proper index
       final allSnapshot = await _firestore.collection('bookings').get();
       final allBookings = allSnapshot.docs.map((doc) => BookingModel.fromJson(doc.data())).toList();
       return allBookings.where((b) => b.bookingDate.toIso8601String().startsWith(formattedDate)).toList();
@@ -69,46 +68,86 @@ class BookingService {
     }
   }
 
-  Future<bool> getRoomBookingStatus(String roomId, DateTime date) async {
-    final bookedRoomIds = await _getBookedRoomIds(date);
-    return bookedRoomIds.contains(roomId);
-  }
-
-  Future<BookingModel> bookRoom({
-    required RoomModel room,
-    required StudentModel student,
-    required DateTime bookingDate,
-  }) async {
-    final isBooked = await getRoomBookingStatus(room.id, bookingDate);
-    if (isBooked) {
-      throw Exception('This room is already booked for the selected date.');
-    }
-
-    final newBooking = BookingModel(
-      id: Uuid().v4(),
-      roomId: room.id,
-      studentRecordId: student.id,
-      studentId: student.studentId,
-      studentName: student.name,
-      batch: student.batch,
-      bookingDate: bookingDate,
-      status: 'active',
-      createdAt: DateTime.now(),
-    );
+  Future<List<String>> fetchBookedSeats(String roomId, DateTime date) async {
+    final formattedDate = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
 
     if (_useMock) {
-      _mockBookings.add(newBooking);
-      return newBooking;
+      return _mockBookings
+          .where((b) => b.roomId == roomId && b.seatId != null && b.bookingDate.toIso8601String().startsWith(formattedDate))
+          .map((b) => b.seatId!)
+          .toList();
     }
 
     try {
-      await _firestore.collection('bookings').doc(newBooking.id).set(newBooking.toJson());
-      return newBooking;
+      final allSnapshot = await _firestore.collection('bookings').get();
+      final allBookings = allSnapshot.docs.map((doc) => BookingModel.fromJson(doc.data())).toList();
+      return allBookings
+          .where((b) => b.roomId == roomId && b.seatId != null && b.bookingDate.toIso8601String().startsWith(formattedDate))
+          .map((b) => b.seatId!)
+          .toList();
     } catch (e) {
-      debugPrint('Error inserting booking to Firebase, falling back to mock: $e');
       _useMock = true;
-      _mockBookings.add(newBooking);
-      return newBooking;
+      return _mockBookings
+          .where((b) => b.roomId == roomId && b.seatId != null && b.bookingDate.toIso8601String().startsWith(formattedDate))
+          .map((b) => b.seatId!)
+          .toList();
+    }
+  }
+
+  Future<List<BookingModel>> bookSeats({
+    required RoomModel room,
+    required List<String> seatIds,
+    required Map<String, StudentModel> seatAssignments,
+    required DateTime bookingDate,
+    required StudentModel currentStudent,
+  }) async {
+    final currentlyBookedSeats = await fetchBookedSeats(room.id, bookingDate);
+    
+    for (var seat in seatIds) {
+      if (currentlyBookedSeats.contains(seat)) {
+        throw Exception('Seat $seat is already booked for the selected date.');
+      }
+    }
+
+    List<BookingModel> newBookings = [];
+
+    for (var seat in seatIds) {
+      final student = seatAssignments[seat]!;
+      final newBooking = BookingModel(
+        id: Uuid().v4(),
+        roomId: room.id,
+        seatId: seat,
+        studentRecordId: student.id,
+        studentId: student.studentId,
+        studentName: student.name,
+        batch: student.batch,
+        bookingDate: bookingDate,
+        status: 'active',
+        createdAt: DateTime.now(),
+        bookedById: currentStudent.id,
+        bookedByName: currentStudent.name,
+      );
+      newBookings.add(newBooking);
+    }
+
+    if (_useMock) {
+      _mockBookings.addAll(newBookings);
+      return newBookings;
+    }
+
+    try {
+      final batch = _firestore.batch();
+      for (var booking in newBookings) {
+        final docRef = _firestore.collection('bookings').doc(booking.id);
+        batch.set(docRef, booking.toJson());
+      }
+      await batch.commit();
+      return newBookings;
+    } catch (e) {
+      debugPrint('Error inserting bookings to Firebase, falling back to mock: $e');
+      _useMock = true;
+      _mockBookings.addAll(newBookings);
+      return newBookings;
     }
   }
 
@@ -124,31 +163,39 @@ class BookingService {
     }
   }
 
-  // Helper to fetch IDs of rooms booked on a specific date
-  Future<List<String>> _getBookedRoomIds(DateTime date) async {
+  // Helper to fetch IDs of rooms that have NO available seats on a specific date
+  Future<List<String>> _getFullyBookedRoomIds(DateTime date, List<RoomModel> allRooms) async {
     final formattedDate = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+    List<BookingModel> bookingsForDate = [];
 
     if (_useMock) {
-      return _mockBookings
-          .where((b) => b.bookingDate.toIso8601String().startsWith(formattedDate))
-          .map((b) => b.roomId)
-          .toList();
+      bookingsForDate = _mockBookings.where((b) => b.bookingDate.toIso8601String().startsWith(formattedDate)).toList();
+    } else {
+      try {
+        final snapshot = await _firestore.collection('bookings').get();
+        final allBookings = snapshot.docs.map((doc) => BookingModel.fromJson(doc.data())).toList();
+        bookingsForDate = allBookings.where((b) => b.bookingDate.toIso8601String().startsWith(formattedDate)).toList();
+      } catch (e) {
+        _useMock = true;
+        bookingsForDate = _mockBookings.where((b) => b.bookingDate.toIso8601String().startsWith(formattedDate)).toList();
+      }
     }
 
-    try {
-      // Just fetch all bookings and filter to avoid complex composite index requirements
-      final snapshot = await _firestore.collection('bookings').get();
-      final bookings = snapshot.docs.map((doc) => BookingModel.fromJson(doc.data())).toList();
-      return bookings
-          .where((b) => b.bookingDate.toIso8601String().startsWith(formattedDate))
-          .map((b) => b.roomId)
-          .toList();
-    } catch (e) {
-      _useMock = true;
-      return _mockBookings
-          .where((b) => b.bookingDate.toIso8601String().startsWith(formattedDate))
-          .map((b) => b.roomId)
-          .toList();
+    // Group bookings by roomId to count booked seats
+    Map<String, int> bookedSeatCounts = {};
+    for (var b in bookingsForDate) {
+      bookedSeatCounts[b.roomId] = (bookedSeatCounts[b.roomId] ?? 0) + 1;
     }
+
+    List<String> fullyBookedRooms = [];
+    for (var room in allRooms) {
+      int totalSeats = room.seatmap?.length ?? room.capacity;
+      if ((bookedSeatCounts[room.id] ?? 0) >= totalSeats && totalSeats > 0) {
+        fullyBookedRooms.add(room.id);
+      }
+    }
+
+    return fullyBookedRooms;
   }
 }
+

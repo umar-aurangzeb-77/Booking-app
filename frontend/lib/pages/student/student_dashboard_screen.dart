@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/booking_service.dart';
 import '../../services/local_session_service.dart';
+import '../../services/admin_room_service.dart';
 import '../../models/student_model.dart';
 import '../../models/room_model.dart';
 import '../../models/booking_model.dart';
@@ -21,13 +22,16 @@ class StudentDashboardScreen extends StatefulWidget {
 class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   final LocalSessionService _sessionService = LocalSessionService();
   final BookingService _bookingService = BookingService();
+  final AdminRoomService _roomService = AdminRoomService();
 
   StudentModel? _student;
+  List<RoomModel> _allRooms = [];
   List<RoomModel> _availableRooms = [];
   List<BookingModel> _bookedRooms = [];
   List<BookingModel> _myBookings = [];
 
   bool _isLoading = true;
+  bool _hasShownNotifications = false;
 
   @override
   void initState() {
@@ -47,18 +51,38 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     }
 
     final today = DateTime.now();
+    final startOfToday = DateTime(today.year, today.month, today.day);
     
     try {
+      final all = await _roomService.fetchRooms();
       final available = await _bookingService.fetchAvailableRooms(today);
       final booked = await _bookingService.fetchBookedRooms(today);
       final mine = await _bookingService.fetchMyBookings(_student!.id);
 
       if (mounted) {
         setState(() {
+          _allRooms = all;
           _availableRooms = available;
           _bookedRooms = booked;
           _myBookings = mine;
         });
+
+        // Show notifications for bookings made by others
+        if (!_hasShownNotifications) {
+          _hasShownNotifications = true;
+          
+          final thirdPartyBookings = mine.where((b) => 
+            b.bookedById != null && 
+            b.bookedById != b.studentRecordId &&
+            !b.bookingDate.isBefore(startOfToday)
+          ).toList();
+
+          if (thirdPartyBookings.isNotEmpty) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _showBookingNotifications(thirdPartyBookings);
+            });
+          }
+        }
       }
     } catch (e) {
       // Ignore or show snackbar
@@ -67,6 +91,45 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _showBookingNotifications(List<BookingModel> bookings) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.notifications_active, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('New Bookings!'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Someone has booked seats for you:'),
+            const SizedBox(height: 12),
+            ...bookings.map((b) {
+              final roomName = _allRooms.firstWhere((r) => r.id == b.roomId, orElse: () => RoomModel(id: '', name: 'Unknown Room', capacity: 0)).name;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Text(
+                  '• ${b.bookedByName} booked ${b.seatId?.replaceAll('Seat ', 'Seat ') ?? 'a seat'} for you in $roomName on ${b.bookingDate.month}/${b.bookingDate.day}/${b.bookingDate.year}.',
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              );
+            }),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Awesome!'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _logout() async {
@@ -176,7 +239,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: _bookedRooms.length,
                     itemBuilder: (context, index) {
-                      return BookedRoomCard(booking: _bookedRooms[index]);
+                      final booking = _bookedRooms[index];
+                      final roomName = _allRooms.firstWhere((r) => r.id == booking.roomId, orElse: () => RoomModel(id: '', name: 'Unknown Room', capacity: 0)).name;
+                      return BookedRoomCard(booking: booking, roomName: roomName);
                     },
                   ),
                 ),
@@ -194,7 +259,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   child: Text('You have not booked any rooms yet.', style: TextStyle(color: Colors.grey)),
                 )
               else
-                ..._myBookings.take(3).map((booking) => MyBookingCard(booking: booking)),
+                ..._myBookings.take(3).map((booking) {
+                  final roomName = _allRooms.firstWhere((r) => r.id == booking.roomId, orElse: () => RoomModel(id: '', name: 'Unknown Room', capacity: 0)).name;
+                  return MyBookingCard(booking: booking, roomName: roomName);
+                }),
 
               const SizedBox(height: 40),
             ],

@@ -15,10 +15,12 @@ class AdminRoomService {
     // Pre-populate with 100 mock rooms so the admin can instantly test scrolling and capacity
     if (_mockRooms.isEmpty) {
       for (int i = 1; i <= 100; i++) {
+        final capacity = 20 + (i % 5) * 10;
         _mockRooms.add(RoomModel(
           id: 'mock-room-$i',
           name: 'Room 1${i.toString().padLeft(2, '0')}',
-          capacity: 20 + (i % 5) * 10,
+          capacity: capacity,
+          seatmap: List.generate(capacity, (index) => 'Seat ${index + 1}'),
           facilities: ['Projector', 'Whiteboard', if (i % 2 == 0) 'Air Conditioning'],
           createdAt: DateTime.now().subtract(Duration(days: i)),
         ));
@@ -66,6 +68,7 @@ class AdminRoomService {
   Future<RoomModel> addRoom(RoomModel room) async {
     final newRoom = room.copyWith(
       id: Uuid().v4(),
+      seatmap: room.seatmap ?? List.generate(room.capacity, (index) => 'Seat ${index + 1}'),
       createdAt: DateTime.now(),
     );
 
@@ -86,17 +89,22 @@ class AdminRoomService {
   }
 
   Future<RoomModel> updateRoom(RoomModel room) async {
+    // Generate new seatmap if capacity changed or seatmap is missing
+    final updatedRoom = room.seatmap == null || room.seatmap!.length != room.capacity
+        ? room.copyWith(seatmap: List.generate(room.capacity, (index) => 'Seat ${index + 1}'))
+        : room;
+
     if (_useMock) {
-      final index = _mockRooms.indexWhere((r) => r.id == room.id);
+      final index = _mockRooms.indexWhere((r) => r.id == updatedRoom.id);
       if (index != -1) {
-        _mockRooms[index] = room;
+        _mockRooms[index] = updatedRoom;
       }
-      return room;
+      return updatedRoom;
     }
 
     try {
-      await _firestore.collection('rooms').doc(room.id).update(room.toJson());
-      return room;
+      await _firestore.collection('rooms').doc(updatedRoom.id).update(updatedRoom.toJson());
+      return updatedRoom;
     } catch (e) {
       debugPrint('Error updating room in Firebase: $e');
       return room;

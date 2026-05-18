@@ -6,6 +6,7 @@ class RoomModel {
   final int capacity;
   final Map<String, dynamic>? metadata;
   final List<String> facilities;
+  final List<String>? seatmap;
   final DateTime? createdAt;
 
   RoomModel({
@@ -16,6 +17,7 @@ class RoomModel {
     required this.capacity,
     this.metadata,
     this.facilities = const [],
+    this.seatmap,
     this.createdAt,
   });
 
@@ -28,6 +30,7 @@ class RoomModel {
       capacity: json['capacity'] ?? 0,
       metadata: json['metadata'],
       facilities: json['facilities'] != null ? List<String>.from(json['facilities']) : [],
+      seatmap: json['seatmap'] != null ? List<String>.from(json['seatmap']) : null,
       createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at']) : null,
     );
   }
@@ -41,6 +44,7 @@ class RoomModel {
       'capacity': capacity,
       if (metadata != null) 'metadata': metadata,
       'facilities': facilities,
+      if (seatmap != null) 'seatmap': seatmap,
       if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
     };
   }
@@ -53,6 +57,7 @@ class RoomModel {
     int? capacity,
     Map<String, dynamic>? metadata,
     List<String>? facilities,
+    List<String>? seatmap,
     DateTime? createdAt,
   }) {
     return RoomModel(
@@ -63,6 +68,7 @@ class RoomModel {
       capacity: capacity ?? this.capacity,
       metadata: metadata ?? this.metadata,
       facilities: facilities ?? this.facilities,
+      seatmap: seatmap ?? this.seatmap,
       createdAt: createdAt ?? this.createdAt,
     );
   }

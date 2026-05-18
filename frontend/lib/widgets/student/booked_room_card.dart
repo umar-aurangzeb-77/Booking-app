@@ -4,10 +4,12 @@ import 'package:intl/intl.dart';
 
 class BookedRoomCard extends StatelessWidget {
   final BookingModel booking;
+  final String roomName;
 
   const BookedRoomCard({
     super.key,
     required this.booking,
+    required this.roomName,
   });
 
   @override
@@ -38,7 +40,7 @@ class BookedRoomCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Room Booked', // Ideally, you'd fetch the room name here. Since we only have roomId in booking, a more robust UI would join rooms. For now, we display booking ID or "Booked".
+                    roomName, 
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -46,6 +48,13 @@ class BookedRoomCard extends StatelessWidget {
                 ),
                 Icon(Icons.event_busy, color: Colors.red.shade400, size: 20),
               ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              booking.seatId != null ? 'Seat: ${booking.seatId}' : 'Room Booked', 
+              style: TextStyle(color: Colors.grey.shade800, fontSize: 14, fontWeight: FontWeight.w500),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 8),
             Text(

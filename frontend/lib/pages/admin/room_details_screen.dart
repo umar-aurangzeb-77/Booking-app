@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/room_model.dart';
 import '../../services/booking_service.dart';
+import '../../services/admin_room_service.dart';
 import 'package:intl/intl.dart';
 
 class RoomDetailsScreen extends StatefulWidget {
@@ -12,8 +13,10 @@ class RoomDetailsScreen extends StatefulWidget {
 
 class _RoomDetailsScreenState extends State<RoomDetailsScreen> {
   final BookingService _bookingService = BookingService();
+  final AdminRoomService _adminRoomService = AdminRoomService();
   bool _isBooked = false;
   bool _isLoadingStatus = true;
+  bool _isDeleting = false;
 
   @override
   void initState() {
@@ -27,7 +30,10 @@ class _RoomDetailsScreenState extends State<RoomDetailsScreen> {
   Future<void> _loadStatus() async {
     final RoomModel room = ModalRoute.of(context)!.settings.arguments as RoomModel;
     try {
-      final status = await _bookingService.getRoomBookingStatus(room.id, DateTime.now());
+      final bookedSeats = await _bookingService.fetchBookedSeats(room.id, DateTime.now());
+      final totalSeats = room.seatmap?.length ?? room.capacity;
+      final status = bookedSeats.length >= totalSeats && totalSeats > 0;
+      
       if (mounted) {
         setState(() {
           _isBooked = status;
@@ -37,6 +43,46 @@ class _RoomDetailsScreenState extends State<RoomDetailsScreen> {
     } catch (_) {
       if (mounted) {
         setState(() => _isLoadingStatus = false);
+      }
+    }
+  }
+
+  Future<void> _deleteRoom(RoomModel room) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Room'),
+        content: Text('Are you sure you want to delete ${room.name}? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() => _isDeleting = true);
+      try {
+        await _adminRoomService.deleteRoom(room.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Room deleted successfully.')),
+          );
+          Navigator.pop(context, true); // Return true to refresh list
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting room: $e')),
+          );
+          setState(() => _isDeleting = false);
+        }
       }
     }
   }
@@ -159,6 +205,25 @@ class _RoomDetailsScreenState extends State<RoomDetailsScreen> {
                   );
                 }).toList(),
               ),
+            const SizedBox(height: 48),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _isDeleting ? null : () => _deleteRoom(room),
+                icon: _isDeleting 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.delete_outline, color: Colors.red),
+                label: Text(
+                  _isDeleting ? 'Deleting...' : 'Delete Room',
+                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: const BorderSide(color: Colors.red),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
           ],
         ),
       ),

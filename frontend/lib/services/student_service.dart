@@ -13,10 +13,10 @@ class StudentService {
 
   StudentService();
 
-  Future<StudentModel?> findStudentByStudentId(String studentId) async {
+  Future<StudentModel?> findStudentByCredentials(String name, String studentId) async {
     if (_useMock) {
       try {
-        return _mockStudents.firstWhere((s) => s.studentId == studentId);
+        return _mockStudents.firstWhere((s) => s.studentId == studentId && s.name == name);
       } catch (_) {
         return null;
       }
@@ -26,6 +26,7 @@ class StudentService {
       final snapshot = await _firestore
           .collection('students')
           .where('student_id', isEqualTo: studentId)
+          .where('name', isEqualTo: name)
           .limit(1)
           .get();
 
@@ -37,7 +38,7 @@ class StudentService {
       debugPrint('Error finding student in Firebase, checking mock: $e');
       _useMock = true;
       try {
-        return _mockStudents.firstWhere((s) => s.studentId == studentId);
+        return _mockStudents.firstWhere((s) => s.studentId == studentId && s.name == name);
       } catch (_) {
         return null;
       }
@@ -71,7 +72,7 @@ class StudentService {
     required int batch,
     required String studentId,
   }) async {
-    final existing = await findStudentByStudentId(studentId);
+    final existing = await findStudentByCredentials(name, studentId);
     if (existing != null) {
       return existing;
     }
@@ -85,5 +86,20 @@ class StudentService {
     );
 
     return await createStudent(newStudent);
+  }
+
+  Future<List<StudentModel>> fetchAllStudents() async {
+    if (_useMock) {
+      return _mockStudents;
+    }
+
+    try {
+      final snapshot = await _firestore.collection('students').get();
+      return snapshot.docs.map((doc) => StudentModel.fromJson(doc.data())).toList();
+    } catch (e) {
+      debugPrint('Error fetching all students from Firebase, falling back to mock: $e');
+      _useMock = true;
+      return _mockStudents;
+    }
   }
 }

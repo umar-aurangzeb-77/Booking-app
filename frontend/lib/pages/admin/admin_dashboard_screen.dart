@@ -4,9 +4,11 @@ import '../../providers/auth_provider.dart';
 import '../../services/admin_room_service.dart';
 import '../../services/booking_service.dart';
 import '../../services/whitelist_service.dart';
+import '../../services/student_service.dart';
 import '../../models/room_model.dart';
 import '../../models/booking_model.dart';
 import '../../models/whitelisted_student_model.dart';
+import '../../models/student_model.dart';
 import '../../widgets/admin/room_card.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -22,11 +24,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final AdminRoomService _roomService = AdminRoomService();
   final BookingService _bookingService = BookingService();
   final WhitelistService _whitelistService = WhitelistService();
+  final StudentService _studentService = StudentService();
   
   int _currentIndex = 0;
   List<RoomModel> _rooms = [];
   List<BookingModel> _allBookings = [];
   List<WhitelistedStudent> _whitelist = [];
+  List<StudentModel> _registeredStudents = [];
   Set<String> _bookedRoomIds = {};
   bool _isLoading = true;
   String? _error;
@@ -50,12 +54,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         _roomService.fetchRooms(),
         _bookingService.fetchBookedRooms(today),
         _whitelistService.getWhitelist(),
+        _studentService.fetchAllStudents(),
       ]);
 
       setState(() {
         _rooms = results[0] as List<RoomModel>;
         _allBookings = results[1] as List<BookingModel>;
         _whitelist = results[2] as List<WhitelistedStudent>;
+        _registeredStudents = results[3] as List<StudentModel>;
         _bookedRoomIds = _allBookings.map((b) => b.roomId).toSet();
         _isLoading = false;
       });
@@ -99,9 +105,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.meeting_room), label: 'Rooms'),
           BottomNavigationBarItem(icon: Icon(Icons.book_online), label: 'Bookings'),
           BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Whitelist'),
+          BottomNavigationBarItem(icon: Icon(Icons.how_to_reg), label: 'Registered'),
         ],
       ),
-      floatingActionButton: _currentIndex == 1 ? null : FloatingActionButton(
+      floatingActionButton: _currentIndex == 1 || _currentIndex == 3 ? null : FloatingActionButton(
         onPressed: _currentIndex == 0 ? _addRoom : _addToWhitelist,
         child: const Icon(Icons.add),
       ),
@@ -113,6 +120,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       case 0: return 'Manage Rooms';
       case 1: return 'Current Bookings';
       case 2: return 'Allowed Students';
+      case 3: return 'Registered Students';
       default: return 'Admin Dashboard';
     }
   }
@@ -165,6 +173,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       case 0: return _buildRoomsList();
       case 1: return _buildBookingsList();
       case 2: return _buildWhitelist();
+      case 3: return _buildRegisteredStudents();
       default: return Container();
     }
   }
@@ -226,6 +235,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               await _whitelistService.removeFromWhitelist(student.id);
               _loadData();
             },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRegisteredStudents() {
+    if (_registeredStudents.isEmpty) return const Center(child: Text('No students have registered yet.'));
+    return ListView.builder(
+      itemCount: _registeredStudents.length,
+      itemBuilder: (context, index) {
+        final student = _registeredStudents[index];
+        return ListTile(
+          leading: const CircleAvatar(backgroundColor: Colors.blueAccent, child: Icon(Icons.person, color: Colors.white)),
+          title: Text(student.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text('ID: ${student.studentId} | Batch: ${student.batch}'),
+          trailing: Text(
+            'Joined: ${student.createdAt.month}/${student.createdAt.day}/${student.createdAt.year}',
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),
         );
       },
