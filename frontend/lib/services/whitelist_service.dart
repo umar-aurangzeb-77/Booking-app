@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/whitelisted_student_model.dart';
 
@@ -39,5 +40,18 @@ class WhitelistService {
       return WhitelistedStudent.fromJson(snapshot.docs.first.data());
     }
     return null;
+  }
+
+  Future<void> clearWhitelist() async {
+    try {
+      final snapshot = await _firestore.collection('whitelist').get();
+      final batch = _firestore.batch();
+      for (var doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error clearing whitelist in Firebase: $e');
+    }
   }
 }

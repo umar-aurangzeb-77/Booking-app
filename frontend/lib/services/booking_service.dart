@@ -197,5 +197,19 @@ class BookingService {
 
     return fullyBookedRooms;
   }
+
+  Future<void> clearAllBookings() async {
+    _mockBookings.clear();
+    try {
+      final snapshot = await _firestore.collection('bookings').get();
+      final batch = _firestore.batch();
+      for (var doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error clearing bookings in Firebase: $e');
+    }
+  }
 }
 

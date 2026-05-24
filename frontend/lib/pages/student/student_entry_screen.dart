@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/student_service.dart';
 import '../../services/local_session_service.dart';
-import '../../services/whitelist_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -24,7 +23,6 @@ class _StudentEntryScreenState extends State<StudentEntryScreen> {
 
   final StudentService _studentService = StudentService();
   final LocalSessionService _sessionService = LocalSessionService();
-  final WhitelistService _whitelistService = WhitelistService();
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -54,19 +52,12 @@ class _StudentEntryScreenState extends State<StudentEntryScreen> {
       final password = _passwordController.text.trim();
 
       try {
-        // Step 1: Check Whitelist
-        final whitelisted = await _whitelistService.checkWhitelist(name, batch, password);
+        // Find registered student record directly using name and password (studentId)
+        final student = await _studentService.findStudentByCredentials(name, password);
         
-        if (whitelisted == null) {
-          throw Exception('You are not authorized to access the system. Please contact Admin.');
+        if (student == null || student.batch != batch) {
+          throw Exception('You are not registered in the system or invalid credentials. Please contact Admin.');
         }
-
-        // Step 2: Proceed to create/find student record
-        final student = await _studentService.findOrCreateStudent(
-          name: name,
-          batch: batch,
-          studentId: password, // Using password as student ID for now or keep it distinct
-        );
 
         await _sessionService.saveCurrentStudent(student);
 

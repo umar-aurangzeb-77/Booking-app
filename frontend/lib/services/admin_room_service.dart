@@ -12,20 +12,7 @@ class AdminRoomService {
   bool _useMock = false;
 
   AdminRoomService() {
-    // Pre-populate with 100 mock rooms so the admin can instantly test scrolling and capacity
-    if (_mockRooms.isEmpty) {
-      for (int i = 1; i <= 100; i++) {
-        final capacity = 20 + (i % 5) * 10;
-        _mockRooms.add(RoomModel(
-          id: 'mock-room-$i',
-          name: 'Room 1${i.toString().padLeft(2, '0')}',
-          capacity: capacity,
-          seatmap: List.generate(capacity, (index) => 'Seat ${index + 1}'),
-          facilities: ['Projector', 'Whiteboard', if (i % 2 == 0) 'Air Conditioning'],
-          createdAt: DateTime.now().subtract(Duration(days: i)),
-        ));
-      }
-    }
+    // Mock rooms start empty to ensure a fresh layout
   }
 
   Future<List<RoomModel>> fetchRooms() async {
@@ -121,6 +108,20 @@ class AdminRoomService {
       await _firestore.collection('rooms').doc(id).delete();
     } catch (e) {
       debugPrint('Error deleting room from Firebase: $e');
+    }
+  }
+
+  Future<void> clearAllRooms() async {
+    _mockRooms.clear();
+    try {
+      final snapshot = await _firestore.collection('rooms').get();
+      final batch = _firestore.batch();
+      for (var doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error clearing rooms in Firebase: $e');
     }
   }
 }

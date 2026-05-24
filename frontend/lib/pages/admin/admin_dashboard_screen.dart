@@ -3,15 +3,12 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/admin_room_service.dart';
 import '../../services/booking_service.dart';
-import '../../services/whitelist_service.dart';
 import '../../services/student_service.dart';
 import '../../models/room_model.dart';
 import '../../models/booking_model.dart';
-import '../../models/whitelisted_student_model.dart';
 import '../../models/student_model.dart';
 import '../../widgets/admin/room_card.dart';
 import '../../theme/app_colors.dart';
-import '../../theme/app_text_styles.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -23,13 +20,11 @@ class AdminDashboardScreen extends StatefulWidget {
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final AdminRoomService _roomService = AdminRoomService();
   final BookingService _bookingService = BookingService();
-  final WhitelistService _whitelistService = WhitelistService();
   final StudentService _studentService = StudentService();
   
   int _currentIndex = 0;
   List<RoomModel> _rooms = [];
   List<BookingModel> _allBookings = [];
-  List<WhitelistedStudent> _whitelist = [];
   List<StudentModel> _registeredStudents = [];
   Set<String> _bookedRoomIds = {};
   bool _isLoading = true;
@@ -53,15 +48,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       final results = await Future.wait([
         _roomService.fetchRooms(),
         _bookingService.fetchBookedRooms(today),
-        _whitelistService.getWhitelist(),
         _studentService.fetchAllStudents(),
       ]);
 
       setState(() {
         _rooms = results[0] as List<RoomModel>;
         _allBookings = results[1] as List<BookingModel>;
-        _whitelist = results[2] as List<WhitelistedStudent>;
-        _registeredStudents = results[3] as List<StudentModel>;
+        _registeredStudents = results[2] as List<StudentModel>;
         _bookedRoomIds = _allBookings.map((b) => b.roomId).toSet();
         _isLoading = false;
       });
@@ -82,10 +75,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
             onPressed: _loadData,
           ),
           IconButton(
             icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
             onPressed: () {
               context.read<AuthProvider>().setRole(null);
               Navigator.pushReplacementNamed(context, '/admin-login');
@@ -98,18 +93,52 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           : _error != null 
               ? Center(child: Text('Error: $_error'))
               : _buildBody(),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.meeting_room), label: 'Rooms'),
-          BottomNavigationBarItem(icon: Icon(Icons.book_online), label: 'Bookings'),
-          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Whitelist'),
-          BottomNavigationBarItem(icon: Icon(Icons.how_to_reg), label: 'Registered'),
-        ],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0x0D000000), // 5% opacity black
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+            child: BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: (index) => setState(() => _currentIndex = index),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              type: BottomNavigationBarType.fixed,
+              selectedItemColor: Colors.black,
+              unselectedItemColor: Colors.black54,
+              selectedFontSize: 12,
+              unselectedFontSize: 12,
+              showSelectedLabels: true,
+              showUnselectedLabels: true,
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.meeting_room),
+                  label: 'Rooms',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.book_online),
+                  label: 'Bookings',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.how_to_reg),
+                  label: 'Registered Students',
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
-      floatingActionButton: _currentIndex == 1 || _currentIndex == 3 ? null : FloatingActionButton(
-        onPressed: _currentIndex == 0 ? _addRoom : _addToWhitelist,
+      floatingActionButton: _currentIndex == 1 ? null : FloatingActionButton(
+        onPressed: _currentIndex == 0 ? _addRoom : _registerNewStudent,
         child: const Icon(Icons.add),
       ),
     );
@@ -119,8 +148,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     switch (_currentIndex) {
       case 0: return 'Manage Rooms';
       case 1: return 'Current Bookings';
-      case 2: return 'Allowed Students';
-      case 3: return 'Registered Students';
+      case 2: return 'Registered Students';
       default: return 'Admin Dashboard';
     }
   }
@@ -130,7 +158,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (result == true) _loadData();
   }
 
-  void _addToWhitelist() {
+  void _registerNewStudent() {
     final nameController = TextEditingController();
     final batchController = TextEditingController();
     final passwordController = TextEditingController();
@@ -138,30 +166,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Allow Student'),
+        title: const Text('Register Student'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Full Name')),
             TextField(controller: batchController, decoration: const InputDecoration(labelText: 'Batch (Year)'), keyboardType: TextInputType.number),
-            TextField(controller: passwordController, decoration: const InputDecoration(labelText: 'Access Password')),
+            TextField(controller: passwordController, decoration: const InputDecoration(labelText: 'Access Password (Student ID)')),
           ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
-              if (nameController.text.isNotEmpty && batchController.text.isNotEmpty && passwordController.text.isNotEmpty) {
-                await _whitelistService.addToWhitelist(
-                  nameController.text.trim(),
-                  int.parse(batchController.text.trim()),
-                  passwordController.text.trim(),
-                );
-                Navigator.pop(context);
-                _loadData();
+              final name = nameController.text.trim();
+              final batchStr = batchController.text.trim();
+              final password = passwordController.text.trim();
+
+              if (name.isNotEmpty && batchStr.isNotEmpty && password.isNotEmpty) {
+                final batch = int.tryParse(batchStr);
+                if (batch != null) {
+                  await _studentService.findOrCreateStudent(
+                    name: name,
+                    batch: batch,
+                    studentId: password,
+                  );
+                  if (mounted) Navigator.pop(context);
+                  _loadData();
+                }
               }
             },
-            child: const Text('Allow'),
+            child: const Text('Register'),
           ),
         ],
       ),
@@ -172,8 +207,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     switch (_currentIndex) {
       case 0: return _buildRoomsList();
       case 1: return _buildBookingsList();
-      case 2: return _buildWhitelist();
-      case 3: return _buildRegisteredStudents();
+      case 2: return _buildRegisteredStudents();
       default: return Container();
     }
   }
@@ -219,30 +253,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildWhitelist() {
-    if (_whitelist.isEmpty) return const Center(child: Text('No students allowed yet.'));
-    return ListView.builder(
-      itemCount: _whitelist.length,
-      itemBuilder: (context, index) {
-        final student = _whitelist[index];
-        return ListTile(
-          leading: const CircleAvatar(child: Icon(Icons.person)),
-          title: Text(student.name),
-          subtitle: Text('Batch: ${student.batch} | Password: ${student.password}'),
-          trailing: IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red),
-            onPressed: () async {
-              await _whitelistService.removeFromWhitelist(student.id);
-              _loadData();
-            },
-          ),
-        );
-      },
-    );
-  }
-
   Widget _buildRegisteredStudents() {
-    if (_registeredStudents.isEmpty) return const Center(child: Text('No students have registered yet.'));
+    if (_registeredStudents.isEmpty) return const Center(child: Text('No students registered yet.'));
     return ListView.builder(
       itemCount: _registeredStudents.length,
       itemBuilder: (context, index) {
@@ -251,9 +263,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           leading: const CircleAvatar(backgroundColor: Colors.blueAccent, child: Icon(Icons.person, color: Colors.white)),
           title: Text(student.name, style: const TextStyle(fontWeight: FontWeight.bold)),
           subtitle: Text('ID: ${student.studentId} | Batch: ${student.batch}'),
-          trailing: Text(
-            'Joined: ${student.createdAt.month}/${student.createdAt.day}/${student.createdAt.year}',
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          trailing: IconButton(
+            icon: const Icon(Icons.delete, color: Colors.red),
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Unregister Student?'),
+                  content: Text('Are you sure you want to unregister ${student.name}? Their profile and credentials will be deleted.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Unregister'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirm == true) {
+                await _studentService.deleteStudent(student.id);
+                _loadData();
+              }
+            },
           ),
         );
       },

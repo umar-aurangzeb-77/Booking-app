@@ -102,4 +102,30 @@ class StudentService {
       return _mockStudents;
     }
   }
+
+  Future<void> deleteStudent(String id) async {
+    if (_useMock) {
+      _mockStudents.removeWhere((s) => s.id == id);
+      return;
+    }
+    try {
+      await _firestore.collection('students').doc(id).delete();
+    } catch (e) {
+      debugPrint('Error deleting student from Firebase: $e');
+    }
+  }
+
+  Future<void> clearAllStudents() async {
+    _mockStudents.clear();
+    try {
+      final snapshot = await _firestore.collection('students').get();
+      final batch = _firestore.batch();
+      for (var doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error clearing students in Firebase: $e');
+    }
+  }
 }
