@@ -16,7 +16,7 @@ class BookedRoomCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 220,
-      margin: const EdgeInsets.only(right: 12, top: 4, bottom: 4),
+      margin: const EdgeInsets.only(right: 12, top: 4, bottom: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),

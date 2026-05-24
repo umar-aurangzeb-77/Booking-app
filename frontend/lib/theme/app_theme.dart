@@ -30,7 +30,7 @@ class AppTheme {
         bodySmall: AppTextStyles.caption,
         labelLarge: AppTextStyles.body,
       ),
-      cardTheme: const CardTheme(
+      cardTheme: const CardThemeData(
         elevation: 4.0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(AppRadius.medium)),

@@ -233,7 +233,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 )
               else
                 SizedBox(
-                  height: 120,
+                  height: 160,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
